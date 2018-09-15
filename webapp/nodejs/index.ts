@@ -423,10 +423,8 @@ fastify.post("/api/actions/login", async (request, reply) => {
   const loginName = request.body.login_name;
   const password = request.body.password;
 
-  const [[userRow]] = await fastify.mysql.query("SELECT * FROM users WHERE login_name = ?", [loginName]);
-  const [[passHashRow]] = await fastify.mysql.query("SELECT SHA2(?, 256)", [password]);
-  const [passHash] = Object.values(passHashRow);
-  if (!userRow || passHash !== userRow.pass_hash) {
+  const [[userRow]] = await fastify.mysql.query("SELECT * FROM users WHERE login_name = ? AND pass_hash =  SHA2(?, 256)", [loginName, password]);
+  if (!userRow) {
     return resError(reply, "authentication_failed", 401);
   }
 
@@ -610,10 +608,8 @@ fastify.post("/admin/api/actions/login", async (request, reply) => {
   const loginName = request.body.login_name;
   const password = request.body.password;
 
-  const [[administratorRow]] = await fastify.mysql.query("SELECT * FROM administrators WHERE login_name = ?", [loginName]);
-  const [[passHashRow]] = await fastify.mysql.query("SELECT SHA2(?, 256)", [password]);
-  const [passHash] = Object.values(passHashRow);
-  if (!administratorRow || passHash !== administratorRow.pass_hash) {
+  const [[administratorRow]] = await fastify.mysql.query("SELECT * FROM administrators WHERE login_name = ? AND pass_hash = SHA2(?, 256)", [loginName, password]);
+  if (!administratorRow) {
     return resError(reply, "authentication_failed", 401);
   }
   reply.setCookie("administrator_id", administratorRow.id, {
