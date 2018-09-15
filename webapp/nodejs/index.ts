@@ -699,8 +699,9 @@ fastify.post("/admin/api/events/:id/actions/edit", { beforeHandler: adminLoginRe
   }
   conn.release();
 
-  const updatedEvent = await getEvent(eventId);
-  reply.send(updatedEvent);
+  event.public = isPublic;
+  event.closed = closed;
+  reply.send(event);
 });
 
 fastify.get("/admin/api/reports/events/:id/sales", { beforeHandler: adminLoginRequired }, async (request, reply) => {
