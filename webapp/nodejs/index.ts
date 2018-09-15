@@ -371,51 +371,57 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
     const [reservationRows] = await fastify.mysql.query("SELECT r.*, e.title AS event_title, e.price AS event_price, e.public_fg AS event_public_fg, e.closed_fg AS event_closed_fg, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? GROUP BY r.event_id ORDER BY MAX(IFNULL(r.canceled_at, r.reserved_at)) DESC LIMIT 5", [user.id]);
     const eventIds = reservationRows.map((row) => row.id);
     if (eventIds.length > 0) {
-      const s_sheet_count = 50;
-      const a_sheet_count = 150;
-      const b_sheet_count = 300;
-      const c_sheet_count = 500;
-      const [reserveCountRows] = await fastify.mysql.query("SELECT r.event_id, count(CASE WHEN s.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN s.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN s.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN s.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM reservations r LEFT OUTER JOIN sheets s ON s.id = r.sheet_id WHERE r.event_id IN (?) AND r.canceled_at IS NULL GROUP BY r.event_id ORDER BY event_id ASC", [eventIds]);
+      const events = await getEvents((_event) => eventIds.includes(_event.id));
       for (const row of reservationRows) {
-        const reserveCountRow = reserveCountRows.find((reserveCountRow) => reserveCountRow.event_id == row.event_id);
-        const s_remain_count = s_sheet_count - (reserveCountRow ? reserveCountRow.s_reserve_count : 0);
-        const a_remain_count = a_sheet_count - (reserveCountRow ? reserveCountRow.a_reserve_count : 0);
-        const b_remain_count = b_sheet_count - (reserveCountRow ? reserveCountRow.b_reserve_count : 0);
-        const c_remain_count = c_sheet_count - (reserveCountRow ? reserveCountRow.c_reserve_count : 0);
-        const event = {
-          id: row.event_id,
-          title: row.event_title,
-          price: row.event_price,
-          sheets: {
-            S: {
-              total: s_sheet_count,
-              remains: s_remain_count,
-              price: 5000 + row.event_price
-            },
-            A: {
-              total: a_sheet_count,
-              remains: a_remain_count,
-              price: 3000 + row.event_price
-            },
-            B: {
-              total: b_sheet_count,
-              remains: b_remain_count,
-              price: 1000 + row.event_price
-            },
-            C: {
-              total: c_sheet_count,
-              remains: c_remain_count,
-              price: 0 + row.event_price
-            }
-          },
-          total: s_sheet_count + a_sheet_count + b_sheet_count + c_sheet_count,
-          remains: s_remain_count + a_remain_count + b_remain_count + c_remain_count,
-          public: !!row.event_public_fg,
-          closed: !!row.event_closed_fg,
-        };
-        recentEvents.push(event);
+        recentEvents.push(events.find((reserveCountRow) => reserveCountRow.event_id == row.event_id));
       }
     }
+    // if (eventIds.length > 0) {
+    //   const s_sheet_count = 50;
+    //   const a_sheet_count = 150;
+    //   const b_sheet_count = 300;
+    //   const c_sheet_count = 500;
+    //   const [reserveCountRows] = await fastify.mysql.query("SELECT r.event_id, count(CASE WHEN s.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN s.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN s.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN s.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM reservations r LEFT OUTER JOIN sheets s ON s.id = r.sheet_id WHERE r.event_id IN (?) AND r.canceled_at IS NULL GROUP BY r.event_id ORDER BY r.event_id ASC", [eventIds]);
+    //   for (const row of reservationRows) {
+    //     const reserveCountRow = reserveCountRows.find((reserveCountRow) => reserveCountRow.event_id == row.event_id);
+    //     const s_remain_count = s_sheet_count - (reserveCountRow ? reserveCountRow.s_reserve_count : 0);
+    //     const a_remain_count = a_sheet_count - (reserveCountRow ? reserveCountRow.a_reserve_count : 0);
+    //     const b_remain_count = b_sheet_count - (reserveCountRow ? reserveCountRow.b_reserve_count : 0);
+    //     const c_remain_count = c_sheet_count - (reserveCountRow ? reserveCountRow.c_reserve_count : 0);
+    //     const event = {
+    //       id: row.event_id,
+    //       title: row.event_title,
+    //       price: row.event_price,
+    //       sheets: {
+    //         S: {
+    //           total: s_sheet_count,
+    //           remains: s_remain_count,
+    //           price: 5000 + row.event_price
+    //         },
+    //         A: {
+    //           total: a_sheet_count,
+    //           remains: a_remain_count,
+    //           price: 3000 + row.event_price
+    //         },
+    //         B: {
+    //           total: b_sheet_count,
+    //           remains: b_remain_count,
+    //           price: 1000 + row.event_price
+    //         },
+    //         C: {
+    //           total: c_sheet_count,
+    //           remains: c_remain_count,
+    //           price: 0 + row.event_price
+    //         }
+    //       },
+    //       total: s_sheet_count + a_sheet_count + b_sheet_count + c_sheet_count,
+    //       remains: s_remain_count + a_remain_count + b_remain_count + c_remain_count,
+    //       public: !!row.event_public_fg,
+    //       closed: !!row.event_closed_fg,
+    //     };
+    //     recentEvents.push(event);
+    //   }
+    // }
   }
   user.recent_events = recentEvents;
   reply.send(user);
