@@ -362,7 +362,7 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
   }
   user.recent_reservations = recentReservations;
 
-  const [[totalPriceRow]] = await fastify.mysql.query("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.id);
+  const [[totalPriceRow]] = await fastify.mysql.query("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", [user.id]);
   const [totalPriceStr] = Object.values(totalPriceRow);
   user.total_price = Number.parseInt(totalPriceStr, 10);
   
@@ -375,7 +375,7 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
       const a_sheet_count = 150;
       const b_sheet_count = 300;
       const c_sheet_count = 500;
-      const [reserveCountRows] = await fastify.mysql.query("SELECT r.event_id, count(CASE WHEN s.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN s.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN s.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN s.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM reservations r LEFT OUTER JOIN sheets s ON s.id = r.sheet_id WHERE r.event_id IN ? AND r.canceled_at IS NULL GROUP BY r.event_id ORDER BY event_id ASC", [eventIds]);
+      const [reserveCountRows] = await fastify.mysql.query("SELECT r.event_id, count(CASE WHEN s.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN s.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN s.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN s.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM reservations r LEFT OUTER JOIN sheets s ON s.id = r.sheet_id WHERE r.event_id IN (?) AND r.canceled_at IS NULL GROUP BY r.event_id ORDER BY event_id ASC", [eventIds]);
       for (const row of reservationRows) {
         const reserveCountRow = reserveCountRows.find((reserveCountRow) => reserveCountRow.event_id == row.event_id);
         const s_remain_count = s_sheet_count - (reserveCountRow ? reserveCountRow.s_reserve_count : 0);
