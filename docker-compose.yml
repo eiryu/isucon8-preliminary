@@ -28,7 +28,7 @@ services:
     links:
       - app
   db:
-    image: mariadb
+    image: mariadb:5.5.60
     ports:
       - 3306:3306
     environment:
