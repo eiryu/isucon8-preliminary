@@ -336,11 +336,10 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
   if (user.id !== (await getLoginUser(request))!.id) {
     return resError(reply, "forbidden", 403);
   }
-
-  const [reservationRows] = await fastify.mysql.query("SELECT r.*, e.title AS event_title, e.price AS event_price, e.public_fg AS event_public_fg, e.closed_fg AS event_closed_fg, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", [user.id]);
-  // 最近予約したイベント : recent_reservations
+  // 最近予約した席 : recent_reservations
   const recentReservations: Array<any> = [];
   {
+    const [reservationRows] = await fastify.mysql.query("SELECT r.*, e.title AS event_title, e.price AS event_price, e.public_fg AS event_public_fg, e.closed_fg AS event_closed_fg, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", [user.id]);
     for (const row of reservationRows) {
       const reservation = {
         id: row.id,
@@ -366,9 +365,10 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
   const [totalPriceStr] = Object.values(totalPriceRow);
   user.total_price = Number.parseInt(totalPriceStr, 10);
   
-  // 最近予約した席 : recent_events
+  // 最近予約したイベント : recent_events
   const recentEvents: Array<any> = [];
   {
+    const [reservationRows] = await fastify.mysql.query("SELECT r.*, e.title AS event_title, e.price AS event_price, e.public_fg AS event_public_fg, e.closed_fg AS event_closed_fg, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? GROUP BY r.event_id ORDER BY MAX(IFNULL(r.canceled_at, r.reserved_at)) DESC LIMIT 5", [user.id]);
     const eventIds = reservationRows.map((row) => row.id);
     if (eventIds.length > 0) {
       const s_sheet_count = 50;
