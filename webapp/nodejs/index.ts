@@ -207,35 +207,33 @@ async function getEvent(eventId: number, loginUserId?: number): Promise<Event | 
     sheetsForRank.remains = 0;
   }
 
-  const [sheetRows] = await fastify.mysql.query("SELECT * FROM sheets ORDER BY `rank`, num");
-
+  const [sheetRows] = await fastify.mysql.query("SELECT sheets.*, reservations.user_id AS reserved_user_id, reservations.reserved_at AS reserved_at FROM sheets LEFT OUTER JOIN reservations ON reservations.sheet_id = sheets.id AND reservations.event_id = ? AND canceled_at IS NULL ORDER BY sheets.`rank`, sheets.num", [eventId]);
   for (const sheetRow of sheetRows) {
-    const sheet = { ...sheetRow };
+    const sheet = { 
+      ...sheetRow 
+    };
     if (!event.sheets[sheet.rank].price) {
       event.sheets[sheet.rank].price = event.price + sheet.price;
     }
-
     event.total++;
     event.sheets[sheet.rank].total++;
 
-    const [[reservation]] = await fastify.mysql.query("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", [event.id, sheet.id]);
-    if (reservation) {
-      if (loginUserId && reservation.user_id === loginUserId) {
+    if (sheet.reserved_user_id) {
+      if (loginUserId && sheet.reserved_user_id === loginUserId) {
         sheet.mine = true;
       }
-
       sheet.reserved = true;
-      sheet.reserved_at = parseTimestampToEpoch(reservation.reserved_at);
+      sheet.reserved_at = parseTimestampToEpoch(sheet.reserved_at);
     } else {
       event.remains++;
       event.sheets[sheet.rank].remains++;
     }
-
     event.sheets[sheet.rank].detail.push(sheet);
 
     delete sheet.id;
     delete sheet.price;
     delete sheet.rank;
+    delete sheet.reserved_user_id;
   }
 
   event.public = !!event.public_fg;
