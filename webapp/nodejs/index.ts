@@ -126,37 +126,6 @@ function fillinUser(request, _reply, done) {
 
 type Event = any;
 
-async function getEvents_old(where: (event: Event) => boolean = (eventRow) => !!eventRow.public_fg): Promise<ReadonlyArray<Event>> {
-  const conn = await getConnection();
-
-  const events = [] as Array<Event>;
-
-  await conn.beginTransaction();
-  try {
-    const [rows] = await conn.query("SELECT * FROM events ORDER BY id ASC");
-
-    const eventIds = rows.filter((row) => where(row)).map((row) => row.id);
-
-    for (const eventId of eventIds) {
-      const event = (await getEvent(eventId))!;
-
-      for (const rank of Object.keys(event.sheets)) {
-        delete event.sheets[rank].detail;
-      }
-
-      events.push(event);
-    }
-
-    await conn.commit();
-  } catch (e) {
-    console.error(new TraceError("Failed to getEvents()", e));
-    await conn.rollback();
-  }
-
-  await conn.release();
-  return events;
-}
-
 async function getEvents(where: (event: Event) => boolean = (eventRow) => !!eventRow.public_fg): Promise<ReadonlyArray<Event>> {
   const conn = await getConnection();
 
