@@ -699,8 +699,8 @@ fastify.post("/admin/api/events/:id/actions/edit", { beforeHandler: adminLoginRe
   }
   conn.release();
 
-  event.public_fg = isPublic;
-  event.closed_fg = closed;
+  event.public = isPublic;
+  event.closed = closed;
   reply.send(event);
 });
 
