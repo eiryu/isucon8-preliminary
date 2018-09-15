@@ -137,7 +137,15 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
   const c_sheet_count = 500;
   await conn.beginTransaction();
   try {
-    const [rows] = await conn.query("SELECT events.*, count(CASE WHEN sheets.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN sheets.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN sheets.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN sheets.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM events LEFT OUTER JOIN reservations ON reservations.event_id = events.id LEFT OUTER JOIN sheets ON sheets.id = reservations.sheet_id AND canceled_at IS NULL GROUP BY events.id ORDER BY events.id ASC");
+    const [rows] = await conn.query(
+      "SELECT " +
+        "events.*, count(CASE WHEN sheets.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, " +
+        "count(CASE WHEN sheets.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, " +
+        "count(CASE WHEN sheets.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, " +
+        "count(CASE WHEN sheets.rank = 'C' THEN 1 ELSE null END) as c_reserve_count " +
+      "FROM events LEFT OUTER JOIN reservations ON reservations.event_id = events.id LEFT OUTER JOIN sheets ON sheets.id = reservations.sheet_id AND canceled_at IS NULL " +
+      "GROUP BY events.id ORDER BY events.id ASC"
+    );
     const filtered_rows = rows.filter((row) => where(row));
     for (const row of filtered_rows) {
       const s_remain_count = s_sheet_count - row.s_reserve_count;
@@ -207,7 +215,12 @@ async function getEvent(eventId: number, loginUserId?: number): Promise<Event | 
     sheetsForRank.remains = 0;
   }
 
-  const [sheetRows] = await fastify.mysql.query("SELECT sheets.*, reservations.user_id AS reserved_user_id, reservations.reserved_at AS reserved_at FROM sheets LEFT OUTER JOIN reservations ON reservations.sheet_id = sheets.id AND reservations.event_id = ? AND canceled_at IS NULL ORDER BY sheets.`rank`, sheets.num", [eventId]);
+  const [sheetRows] = await fastify.mysql.query(
+    "SELECT sheets.*, reservations.user_id AS reserved_user_id, reservations.reserved_at AS reserved_at " +
+    "FROM sheets LEFT OUTER JOIN reservations ON reservations.sheet_id = sheets.id AND reservations.event_id = ? AND canceled_at IS NULL " +
+    "ORDER BY sheets.`rank`, sheets.num",
+    [eventId]
+  );
   for (const sheetRow of sheetRows) {
     const sheet = { 
       ...sheetRow 
@@ -339,7 +352,13 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
 
   const recentReservations: Array<any> = [];
   {
-    const [rows] = await fastify.mysql.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", [[user.id]]);
+    const [rows] = await fastify.mysql.query(
+      "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num " +
+      "FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id " +
+      "WHERE r.user_id = ? " +
+      "ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5",
+      [[user.id]]
+    );
 
     for (const row of rows) {
       const event = await getEvent(row.event_id);
@@ -364,13 +383,21 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
 
   user.recent_reservations = recentReservations;
 
-  const [[totalPriceRow]] = await fastify.mysql.query("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.id);
+  const [[totalPriceRow]] = await fastify.mysql.query(
+    "SELECT IFNULL(SUM(e.price + s.price), 0) " +
+    "FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id " +
+    "WHERE r.user_id = ? AND r.canceled_at IS NULL",
+    user.id
+  );
   const [totalPriceStr] = Object.values(totalPriceRow);
   user.total_price = Number.parseInt(totalPriceStr, 10);
 
   const recentEvents: Array<any> = [];
   {
-    const [rows] = await fastify.mysql.query("SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5", [user.id]);
+    const [rows] = await fastify.mysql.query(
+      "SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5",
+      [user.id]
+    );
     for (const row of rows) {
       const event = await getEvent(row.event_id);
       for (const sheetRank of Object.keys(event.sheets)) {
@@ -445,7 +472,12 @@ fastify.post("/api/events/:id/actions/reserve", { beforeHandler: loginRequired }
   let sheetRow: any;
   let reservationId: any;
   while (true) {
-    [[sheetRow]] = await fastify.mysql.query("SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", [event.id, rank]);
+    [[sheetRow]] = await fastify.mysql.query(
+      "SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations " +
+      "WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? " +
+      "ORDER BY RAND() LIMIT 1",
+      [event.id, rank]
+    );
 
     if (!sheetRow) {
       return resError(reply, "sold_out", 409);
@@ -454,7 +486,10 @@ fastify.post("/api/events/:id/actions/reserve", { beforeHandler: loginRequired }
     const conn = await getConnection();
     await conn.beginTransaction();
     try {
-      const [result] = await conn.query("INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", [event.id, sheetRow.id, user.id, new Date()]);
+      const [result] = await conn.query(
+        "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)",
+        [event.id, sheetRow.id, user.id, new Date()]
+      );
       reservationId = result.insertId;
       await conn.commit();
     } catch (e) {
@@ -497,7 +532,10 @@ fastify.delete("/api/events/:id/sheets/:rank/:num/reservation", { beforeHandler:
   let done = false;
   await conn.beginTransaction();
   TRANSACTION: try {
-    const [[reservationRow]] = await conn.query("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE", [event.id, sheetRow.id]);
+    const [[reservationRow]] = await conn.query(
+      "SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id HAVING reserved_at = MIN(reserved_at) FOR UPDATE",
+      [event.id, sheetRow.id]
+    );
     if (!reservationRow) {
       resError(reply, "not_reserved", 400);
       done = true;
@@ -674,7 +712,12 @@ fastify.get("/admin/api/reports/events/:id/sales", { beforeHandler: adminLoginRe
   const conn = await getConnection();
   await conn.beginTransaction();
   try {
-    const [reservationRows] = await conn.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC", [eventId]);
+    const [reservationRows] = await conn.query(
+      "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price " +
+      "FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id " +
+      "WHERE r.event_id = ? ORDER BY reserved_at ASC",
+      [eventId]
+    );
     for (const reservationRow of reservationRows) {
       const report = {
         reservation_id: reservationRow.id,
