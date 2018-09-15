@@ -699,45 +699,50 @@ fastify.get("/admin/api/reports/events/:id/sales", { beforeHandler: adminLoginRe
 });
 
 fastify.get("/admin/api/reports/sales", { beforeHandler: adminLoginRequired }, async (request, reply) => {
-  let reports: Array<any> = [];
-
   const conn = await getConnection();
   await conn.beginTransaction();
+  let reservationRows: MySQLResultRows;
   try {
-    const [reservationRows] = await conn.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.id AS event_id, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id ORDER BY reserved_at ASC");
-    for (const reservationRow of reservationRows) {
-      const report = {
-        reservation_id: reservationRow.id,
-        event_id: reservationRow.event_id,
-        rank: reservationRow.sheet_rank,
-        num: reservationRow.sheet_num,
-        user_id: reservationRow.user_id,
-        sold_at: new Date(reservationRow.reserved_at).toISOString(),
-        canceled_at: reservationRow.canceled_at ? new Date(reservationRow.canceled_at).toISOString() : "",
-        price: reservationRow.event_price + reservationRow.sheet_price,
-      };
-      reports.push(report);
-    }
+    [reservationRows] = await conn.query(
+      "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.id AS event_id, e.price AS event_price " +
+      "FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id " +
+      "ORDER BY reserved_at ASC"
+    );
     await conn.commit();
   } catch (e) {
-    console.error(e);
     await conn.rollback();
+    throw e;
   }
   conn.release();
+
+  let reports: Array<any> = [];
+  for (const reservationRow of reservationRows) {
+    const report = {
+      reservation_id: reservationRow.id,
+      event_id: reservationRow.event_id,
+      rank: reservationRow.sheet_rank,
+      num: reservationRow.sheet_num,
+      user_id: reservationRow.user_id,
+      sold_at: new Date(reservationRow.reserved_at).toISOString(),
+      canceled_at: reservationRow.canceled_at ? new Date(reservationRow.canceled_at).toISOString() : "",
+      price: reservationRow.event_price + reservationRow.sheet_price,
+    };
+    reports.push(report);
+  }
 
   renderReportCsv(reply, reports);
 });
 
+/**
+ * 渡された販売情報を CSV レポートに変換してレスポンスとして返す。
+ * 並び順は渡されたレポート項目の順のまま。
+ */
 async function renderReportCsv<T>(reply: FastifyReply<T>, reports: ReadonlyArray<any>) {
-  const sortedReports = [...reports].sort((a, b) => {
-    return a.sold_at.localeCompare(b.sold_at);
-  });
-
   const keys = ["reservation_id", "event_id", "rank", "num", "price", "user_id", "sold_at", "canceled_at"];
 
   let body = keys.join(",");
   body += "\n";
-  for (const report of sortedReports) {
+  for (const report of reports) {
     body += keys.map((key) => report[key]).join(",");
     body += "\n";
   }
