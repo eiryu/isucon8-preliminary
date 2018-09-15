@@ -1,0 +1,13 @@
+FROM node:8.11.4
+
+RUN mkdir /app
+WORKDIR /app
+WORKDIR /app
+
+COPY ./nodejs/ /app/
+# Windows ではシンボリックリンクが有効でないので、直接コピー。
+RUN rm /app/public && mkdir /app/public
+COPY ./static /app/public/
+
+# Windows ではシンボリックリンクが有効でないので、ts-node の実行ファイルを直接参照。
+CMD ["node", "./node_modules/ts-node/dist/bin.js", "index.ts"]
