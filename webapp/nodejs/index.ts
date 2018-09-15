@@ -135,7 +135,6 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
   const a_sheet_count = 150;
   const b_sheet_count = 300;
   const c_sheet_count = 500;
-  await conn.beginTransaction();
   try {
     const [rows] = await conn.query("SELECT events.*, count(CASE WHEN sheets.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN sheets.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN sheets.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN sheets.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM events LEFT OUTER JOIN reservations ON reservations.event_id = events.id AND reservations.canceled_at IS NULL LEFT OUTER JOIN sheets ON sheets.id = reservations.sheet_id GROUP BY events.id ORDER BY events.id ASC");
     const filtered_rows = rows.filter((row) => where(row));
@@ -177,7 +176,6 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
       };
       events.push(event);
     }
-    await conn.commit();
   } catch (e) {
     console.error(new TraceError("Failed to getEvents()", e));
     await conn.rollback();
