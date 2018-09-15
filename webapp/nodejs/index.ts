@@ -390,22 +390,22 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
             S: {
               total: s_sheet_count,
               remains: s_remain_count,
-              price: 5000 + row.price
+              price: 5000 + row.event_price
             },
             A: {
               total: a_sheet_count,
               remains: a_remain_count,
-              price: 3000 + row.price
+              price: 3000 + row.event_price
             },
             B: {
               total: b_sheet_count,
               remains: b_remain_count,
-              price: 1000 + row.price
+              price: 1000 + row.event_price
             },
             C: {
               total: c_sheet_count,
               remains: c_remain_count,
-              price: 0 + row.price
+              price: 0 + row.event_price
             }
           },
           total: s_sheet_count + a_sheet_count + b_sheet_count + c_sheet_count,
