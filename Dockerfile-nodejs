@@ -1,0 +1,20 @@
+FROM node:8.11.4
+
+RUN apt update && apt install -y mariadb-client
+
+RUN mkdir /app
+
+RUN mkdir -p /app/webapp/nodejs
+COPY ./webapp/nodejs/ /app/webapp/nodejs/
+
+RUN mkdir -p /app/db
+COPY ./db/ /app/db/
+
+# Windows ではシンボリックリンクが有効でないので、直接コピー。
+RUN rm /app/webapp/nodejs/public && mkdir /app/webapp/nodejs/public
+COPY ./webapp/static/ /app/webapp/nodejs/public/
+
+WORKDIR /app/webapp/nodejs/
+
+# Windows ではシンボリックリンクが有効でないので、ts-node の実行ファイルを直接参照。
+CMD ["node", "./node_modules/ts-node/dist/bin.js", "index.ts"]
