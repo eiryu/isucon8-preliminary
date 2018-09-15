@@ -13,7 +13,7 @@ import { IncomingMessage } from "http";
 
 const execFile = util.promisify(child_process.execFile);
 
-type MySQLResultRows = Array<any> & { insertId: number };
+type MySQLResultRows = Array<any> & {  insertId: number };
 type MySQLColumnCatalogs = Array<any>;
 
 type MySQLResultSet = [MySQLResultRows, MySQLColumnCatalogs];
@@ -125,7 +125,7 @@ function fillinUser(request, _reply, done) {
 
 type Event = any;
 
-async function getEvents(where: (event: Event) => boolean = (eventRow) => !!eventRow.public_fg): Promise<ReadonlyArray<Event>> {
+async function getEvents_old(where: (event: Event) => boolean = (eventRow) => !!eventRow.public_fg): Promise<ReadonlyArray<Event>> {
   const conn = await getConnection();
 
   const events = [] as Array<Event>;
@@ -152,6 +152,67 @@ async function getEvents(where: (event: Event) => boolean = (eventRow) => !!even
     await conn.rollback();
   }
 
+  await conn.release();
+  return events;
+}
+
+async function getEvents(where: (event: Event) => boolean = (eventRow) => !!eventRow.public_fg): Promise<ReadonlyArray<Event>> {
+  const conn = await getConnection();
+
+  const events = [] as Array<Event>;
+
+  const s_sheet_count = 50;
+  const a_sheet_count = 150;
+  const b_sheet_count = 300;
+  const c_sheet_count = 500;
+  await conn.beginTransaction();
+  try {
+    const [rows] = await conn.query("SELECT events.*, count(CASE WHEN sheets.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN sheets.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN sheets.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN sheets.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM events LEFT OUTER JOIN reservations ON reservations.event_id = events.id LEFT OUTER JOIN sheets ON sheets.id = reservations.sheet_id AND canceled_at IS NULL GROUP BY events.id ORDER BY events.id ASC");
+    const filtered_rows = rows.filter((row) => where(row));
+    for (const row of filtered_rows) {
+      const s_remain_count = s_sheet_count - row.s_reserve_count;
+      const a_remain_count = a_sheet_count - row.a_reserve_count;
+      const b_remain_count = b_sheet_count - row.b_reserve_count;
+      const c_remain_count = c_sheet_count - row.c_reserve_count;
+      const event = {
+        id: row.id,
+        title: row.title,
+        price: row.price,
+        total: s_sheet_count + a_sheet_count + b_sheet_count + c_sheet_count,
+        remains: s_remain_count + a_remain_count + b_remain_count + c_remain_count,
+        public: !!row.public_fg,
+        closed: !!row.closed_fg,
+        sheets: {
+          S: {
+            total: s_sheet_count,
+            remains: s_remain_count,
+            price: 5000 + row.price
+          },
+          A: {
+            total: a_sheet_count,
+            remains: a_remain_count,
+            price: 3000 + row.price
+          },
+          B: {
+            total: b_sheet_count,
+            remains: b_remain_count,
+            price: 1000 + row.price
+          },
+          C: {
+            total: c_sheet_count,
+            remains: c_remain_count,
+            price: 0 + row.price
+          }
+        },
+      };
+      events.push(event);
+    }
+    await conn.commit();
+  } catch (e) {
+    console.error(new TraceError("Failed to getEvents()", e));
+    await conn.rollback();
+  }
+  
   await conn.release();
   return events;
 }
