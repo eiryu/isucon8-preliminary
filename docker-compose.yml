@@ -1,0 +1,38 @@
+version: "3"
+services:
+  app:
+    image: torb-app-ts
+    build:
+      context: .
+      dockerfile: Dockerfile-nodejs
+    links:
+      - db
+    environment: # See : env.sh
+      - DB_DATABASE=torb
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=isucon
+      - DB_PASS=isucon
+      - APP_LISTEN_HOST=0.0.0.0
+    ports:
+      - 8080:8080
+  web:
+    image: lkwg82/h2o-http2-server:v2.0.4
+    ports:
+       - "80:80"
+    volumes:
+       - "./conf/h2o.localhost.conf:/etc/h2o/h2o.conf"
+       - "./local/log/h2o:/var/log/h2o"
+       - "./local/h2o-pid:/var/run/h2o"
+       - "./webapp/static:/static"
+    links:
+      - app
+  db:
+    image: mariadb
+    ports:
+      - 3306:3306
+    environment:
+      - MYSQL_DATABASE=torb
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+      - MYSQL_USER=isucon
+      - MYSQL_PASSWORD=isucon
