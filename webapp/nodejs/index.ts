@@ -336,47 +336,85 @@ fastify.get("/api/users/:id", { beforeHandler: loginRequired }, async (request, 
   if (user.id !== (await getLoginUser(request))!.id) {
     return resError(reply, "forbidden", 403);
   }
-
+  // 最近予約した席 : recent_reservations
   const recentReservations: Array<any> = [];
   {
-    const [rows] = await fastify.mysql.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", [[user.id]]);
-
-    for (const row of rows) {
-      const event = await getEvent(row.event_id);
-
+    const [reservationRows] = await fastify.mysql.query("SELECT r.*, e.title AS event_title, e.price AS event_price, e.public_fg AS event_public_fg, e.closed_fg AS event_closed_fg, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", [user.id]);
+    for (const row of reservationRows) {
       const reservation = {
         id: row.id,
-        event,
+        event: {
+          id: row.event_id,
+          title: row.event_title,
+			    price: row.event_price,
+			    public: !!row.event_public_fg,
+			    closed: !!row.event_closed_fg
+        },
         sheet_rank: row.sheet_rank,
         sheet_num: row.sheet_num,
-        price: event.sheets[row.sheet_rank].price,
+        price: row.event_price + row.sheet_price,
         reserved_at: parseTimestampToEpoch(row.reserved_at),
         canceled_at: row.canceled_at ? parseTimestampToEpoch(row.canceled_at) : null,
       };
-
-      delete event.sheets;
-      delete event.total;
-      delete event.remains;
-
       recentReservations.push(reservation);
     }
   }
-
   user.recent_reservations = recentReservations;
 
-  const [[totalPriceRow]] = await fastify.mysql.query("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.id);
+  const [[totalPriceRow]] = await fastify.mysql.query("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", [user.id]);
   const [totalPriceStr] = Object.values(totalPriceRow);
   user.total_price = Number.parseInt(totalPriceStr, 10);
-
+  
+  // 最近予約したイベント : recent_events
   const recentEvents: Array<any> = [];
   {
-    const [rows] = await fastify.mysql.query("SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5", [user.id]);
-    for (const row of rows) {
-      const event = await getEvent(row.event_id);
-      for (const sheetRank of Object.keys(event.sheets)) {
-        delete event.sheets[sheetRank].detail;
+    const [reservationRows] = await fastify.mysql.query("SELECT r.*, e.title AS event_title, e.price AS event_price, e.public_fg AS event_public_fg, e.closed_fg AS event_closed_fg, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? GROUP BY r.event_id ORDER BY MAX(IFNULL(r.canceled_at, r.reserved_at)) DESC LIMIT 5", [user.id]);
+    const eventIds = reservationRows.map((row) => row.event_id);
+    if (eventIds.length > 0) {
+      const s_sheet_count = 50;
+      const a_sheet_count = 150;
+      const b_sheet_count = 300;
+      const c_sheet_count = 500;
+      const [reserveCountRows] = await fastify.mysql.query("SELECT r.event_id, count(CASE WHEN s.rank = 'S' THEN 1 ELSE null END) as s_reserve_count, count(CASE WHEN s.rank = 'A' THEN 1 ELSE null END) as a_reserve_count, count(CASE WHEN s.rank = 'B' THEN 1 ELSE null END) as b_reserve_count, count(CASE WHEN s.rank = 'C' THEN 1 ELSE null END) as c_reserve_count FROM reservations r LEFT OUTER JOIN sheets s ON s.id = r.sheet_id WHERE r.event_id IN (?) AND r.canceled_at IS NULL GROUP BY r.event_id ORDER BY r.event_id ASC", [eventIds]);
+      for (const row of reservationRows) {
+        const reserveCountRow = reserveCountRows.find((reserveCountRow) => reserveCountRow.event_id == row.event_id);
+        const s_remain_count = s_sheet_count - (reserveCountRow ? reserveCountRow.s_reserve_count : 0);
+        const a_remain_count = a_sheet_count - (reserveCountRow ? reserveCountRow.a_reserve_count : 0);
+        const b_remain_count = b_sheet_count - (reserveCountRow ? reserveCountRow.b_reserve_count : 0);
+        const c_remain_count = c_sheet_count - (reserveCountRow ? reserveCountRow.c_reserve_count : 0);
+        const event = {
+          id: row.event_id,
+          title: row.event_title,
+          price: row.event_price,
+          sheets: {
+            S: {
+              total: s_sheet_count,
+              remains: s_remain_count,
+              price: 5000 + row.event_price
+            },
+            A: {
+              total: a_sheet_count,
+              remains: a_remain_count,
+              price: 3000 + row.event_price
+            },
+            B: {
+              total: b_sheet_count,
+              remains: b_remain_count,
+              price: 1000 + row.event_price
+            },
+            C: {
+              total: c_sheet_count,
+              remains: c_remain_count,
+              price: 0 + row.event_price
+            }
+          },
+          total: s_sheet_count + a_sheet_count + b_sheet_count + c_sheet_count,
+          remains: s_remain_count + a_remain_count + b_remain_count + c_remain_count,
+          public: !!row.event_public_fg,
+          closed: !!row.event_closed_fg,
+        };
+        recentEvents.push(event);
       }
-      recentEvents.push(event);
     }
   }
   user.recent_events = recentEvents;
