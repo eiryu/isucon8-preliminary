@@ -3,11 +3,10 @@ services:
   app:
     image: torb-app-ts
     build:
-      context: ./webapp
+      context: .
       dockerfile: Dockerfile-nodejs
     links:
       - db
-    #   - wd-server-fx2
     environment: # See : env.sh
       - DB_DATABASE=torb
       - DB_HOST=db
@@ -17,8 +16,6 @@ services:
       - APP_LISTEN_HOST=0.0.0.0
     ports:
       - 8080:8080
-    # volumes:
-    #   - ./sampleProcessors:/app/processors
   web:
     image: lkwg82/h2o-http2-server:v2.0.4
     ports:
@@ -39,8 +36,3 @@ services:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
       - MYSQL_USER=isucon
       - MYSQL_PASSWORD=isucon
-      #- MYSQL_ROOT_HOST=%
-  # wd-server-fx2:
-  #   image: quay.io/wakaba/firefoxdriver:stable
-  #   ports:
-  #     - 10002:9516

@@ -245,7 +245,15 @@ fastify.get("/", { beforeHandler: fillinUser }, async (request, reply) => {
 });
 
 fastify.get("/initialize", async (_request, reply) => {
-  await execFile("../../db/init.sh");
+  await execFile("../../db/init.sh", [], {
+    env: {
+      DB_HOST: process.env.DB_HOST,
+      DB_PORT: process.env.DB_PORT,
+      DB_USER: process.env.DB_USER,
+      DB_PASS: process.env.DB_PASS,
+      DB_DATABASE: process.env.DB_DATABASE,
+    }
+  });
 
   reply.code(204);
 });
