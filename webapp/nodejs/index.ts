@@ -253,9 +253,11 @@ function sanitizeEvent(event: Event) {
 }
 
 async function validateRank(rank: string): Promise<boolean> {
-  const [[row]] = await fastify.mysql.query("SELECT COUNT(*) FROM sheets WHERE `rank` = ?", [rank]);
-  const [count] = Object.values(row);
-  return count > 0;
+  // ランクは、SからCまで固定なのでSQLから除外する
+  return ["S", "A", "B", "C"].includes(rank);
+  // const [[row]] = await fastify.mysql.query("SELECT COUNT(*) FROM sheets WHERE `rank` = ?", [rank]);
+  // const [count] = Object.values(row);
+  // return count > 0;
 }
 
 function parseTimestampToEpoch(timestamp: string) {
