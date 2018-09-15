@@ -12,6 +12,7 @@ import util from "util";
 import { IncomingMessage } from "http";
 
 const execFile = util.promisify(child_process.execFile);
+const listenHost = process.env.APP_LISTEN_HOST || "127.0.0.1";
 
 type MySQLResultRows = Array<any> & { insertId: number };
 type MySQLColumnCatalogs = Array<any>;
@@ -702,7 +703,7 @@ function resError(reply, error: string = "unknown", status: number = 500) {
     .send({ error });
 }
 
-fastify.listen(8080, (err, address) => {
+fastify.listen(8080, listenHost, (err, address) => {
   if (err) {
     throw new TraceError("Failed to listening", err);
   }
