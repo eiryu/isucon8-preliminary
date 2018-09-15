@@ -671,21 +671,29 @@ fastify.get("/admin/api/reports/events/:id/sales", { beforeHandler: adminLoginRe
 
   let reports: Array<any> = [];
 
-  const [reservationRows] = await fastify.mysql.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE", [eventId]);
-  for (const reservationRow of reservationRows) {
-    const report = {
-      reservation_id: reservationRow.id,
-      event_id: event.id,
-      rank: reservationRow.sheet_rank,
-      num: reservationRow.sheet_num,
-      user_id: reservationRow.user_id,
-      sold_at: new Date(reservationRow.reserved_at).toISOString(),
-      canceled_at: reservationRow.canceled_at ? new Date(reservationRow.canceled_at).toISOString() : "",
-      price: reservationRow.event_price + reservationRow.sheet_price,
-    };
-
-    reports.push(report);
+  const conn = await getConnection();
+  await conn.beginTransaction();
+  try {
+    const [reservationRows] = await conn.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC", [eventId]);
+    for (const reservationRow of reservationRows) {
+      const report = {
+        reservation_id: reservationRow.id,
+        event_id: event.id,
+        rank: reservationRow.sheet_rank,
+        num: reservationRow.sheet_num,
+        user_id: reservationRow.user_id,
+        sold_at: new Date(reservationRow.reserved_at).toISOString(),
+        canceled_at: reservationRow.canceled_at ? new Date(reservationRow.canceled_at).toISOString() : "",
+        price: reservationRow.event_price + reservationRow.sheet_price,
+      };
+      reports.push(report);
+    }
+    await conn.commit();
+  } catch (e) {
+    console.error(e);
+    await conn.rollback();
   }
+  conn.release();
 
   renderReportCsv(reply, reports);
 });
@@ -693,21 +701,29 @@ fastify.get("/admin/api/reports/events/:id/sales", { beforeHandler: adminLoginRe
 fastify.get("/admin/api/reports/sales", { beforeHandler: adminLoginRequired }, async (request, reply) => {
   let reports: Array<any> = [];
 
-  const [reservationRows] = await fastify.mysql.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.id AS event_id, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id ORDER BY reserved_at ASC FOR UPDATE");
-  for (const reservationRow of reservationRows) {
-    const report = {
-      reservation_id: reservationRow.id,
-      event_id: reservationRow.event_id,
-      rank: reservationRow.sheet_rank,
-      num: reservationRow.sheet_num,
-      user_id: reservationRow.user_id,
-      sold_at: new Date(reservationRow.reserved_at).toISOString(),
-      canceled_at: reservationRow.canceled_at ? new Date(reservationRow.canceled_at).toISOString() : "",
-      price: reservationRow.event_price + reservationRow.sheet_price,
-    };
-
-    reports.push(report);
+  const conn = await getConnection();
+  await conn.beginTransaction();
+  try {
+    const [reservationRows] = await conn.query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.id AS event_id, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id ORDER BY reserved_at ASC");
+    for (const reservationRow of reservationRows) {
+      const report = {
+        reservation_id: reservationRow.id,
+        event_id: reservationRow.event_id,
+        rank: reservationRow.sheet_rank,
+        num: reservationRow.sheet_num,
+        user_id: reservationRow.user_id,
+        sold_at: new Date(reservationRow.reserved_at).toISOString(),
+        canceled_at: reservationRow.canceled_at ? new Date(reservationRow.canceled_at).toISOString() : "",
+        price: reservationRow.event_price + reservationRow.sheet_price,
+      };
+      reports.push(report);
+    }
+    await conn.commit();
+  } catch (e) {
+    console.error(e);
+    await conn.rollback();
   }
+  conn.release();
 
   renderReportCsv(reply, reports);
 });
