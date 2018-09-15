@@ -14,10 +14,22 @@ services:
       - DB_PORT=3306
       - DB_USER=isucon
       - DB_PASS=isucon
+      - APP_LISTEN_HOST=0.0.0.0
     ports:
       - 8080:8080
     # volumes:
     #   - ./sampleProcessors:/app/processors
+  web:
+    image: lkwg82/h2o-http2-server:v2.0.4
+    ports:
+       - "80:80"
+    volumes:
+       - "./conf/h2o.localhost.conf:/etc/h2o/h2o.conf"
+       - "./local/log/h2o:/var/log/h2o"
+       - "./local/h2o-pid:/var/run/h2o"
+       - "./webapp/static:/static"
+    links:
+      - app
   db:
     image: mariadb
     ports:
